@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Saki Follow Mouse</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+      background: linear-gradient(to bottom, #a2d5f2, #bde4ff); /* 默认白天 */
+      position: relative;
+      transition: background 1s ease;
+    }
+
+    .night-mode {
+      background: radial-gradient(ellipse at center, #0f0f23, #050517, #000000);
+    }
+
+    .flip-img {
+      position: absolute;
+      z-index: 3;
+      transition: transform 0.3s ease;
+      cursor: pointer;
+    }
+
+    .flipped {
+      transform: scaleX(-1);
+    }
+
+    /* 彩虹拖尾粒子 */
+    .rainbow-particle {
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      opacity: 1;
+      pointer-events: none;
+      box-shadow: 0 0 6px currentColor;
+      animation: fadeOut 1s forwards;
+    }
+
+    @keyframes fadeOut {
+      to {
+        transform: scale(2) rotate(360deg);
+        opacity: 0;
+      }
+    }
+
+    /* 光晕扩散特效 */
+    .glow-ring {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255, 255, 255, 0.5);
+      border-radius: 50%;
+      opacity: 1;
+      z-index: 0;
+      pointer-events: none;
+      animation: expandGlow 1s forwards;
+    }
+
+    @keyframes expandGlow {
+      0% {
+        transform: scale(1);
+        opacity: 0.6;
+      }
+      100% {
+        transform: scale(6);
+        opacity: 0;
+        border-color: transparent;
+      }
+    }
+
+    /* ☀️ 太阳光晕 */
+    .sun {
+      position: absolute;
+      width: 150px;
+      height: 150px;
+      background: radial-gradient(circle, rgba(255, 255, 200, 0.4), transparent 70%);
+      border-radius: 50%;
+      top: 20%;
+      left: 80%;
+      z-index: 0;
+      pointer-events: none;
+      animation: sunPulse 3s infinite alternate;
+    }
+
+    .moon {
+  display: none;
+  position: absolute;
+  width: 150px;
+  height: 150px;
+  /* 修改为米黄色渐变 */
+  background: radial-gradient(circle, #f5e6ca, #d2b48c 70%, transparent 90%);
+  border-radius: 50%;
+  top: 20%;
+  left: 80%;
+  z-index: 0;
+  pointer-events: none;
+  /* 修改为米黄色光晕 */
+  box-shadow: 0 0 30px #f5e6ca;
+}
+
+    @keyframes sunPulse {
+      from { transform: scale(1); }
+      to { transform: scale(1.05); }
+    }
+
+    /* 🌌 星星闪烁（夜间模式）*/
+    .star {
+      position: absolute;
+      width: 2px;
+      height: 2px;
+      background: white;
+      border-radius: 50%;
+      opacity: 0.8;
+      z-index: 0;
+      pointer-events: none;
+      animation: twinkle 2s infinite ease-in-out;
+    }
+
+    @keyframes twinkle {
+      0%, 100% { opacity: 0.2; }
+      50% { opacity: 1; }
+    }
+
+    /* 🌬️ 对话气泡 */
+    .speech-bubble {
+      position: absolute;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 16px;
+      padding: 10px 15px;
+      font-family: sans-serif;
+      font-size: 14px;
+      color: #333;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+      white-space: nowrap;
+      z-index: 4;
+      animation: bubbleFade 3s forwards;
+    }
+
+    @keyframes bubbleFade {
+      0% { opacity: 1; transform: translateY(0); }
+      90% { opacity: 1; }
+      100% { opacity: 0; transform: translateY(-20px); }
+    }
+
+    /* 💡 夜间模式按钮 */
+    .toggle-night-btn {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 10px 20px;
+      background: #fff;
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+      z-index: 1000;
+      transition: all 0.3s ease;
+    }
+
+    .toggle-night-btn.night {
+      background: #333;
+      color: #fff;
+    }
+
+    /* 🌌 银河绘制 canvas */
+    #galaxyCanvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    /* 🌠 流星特效 */
+    .shooting-star {
+      position: absolute;
+      width: 2px;
+      height: 40px;
+      background: linear-gradient(to bottom, #ffffff, transparent);
+      transform-origin: top;
+      opacity: 0;
+      pointer-events: none;
+      will-change: transform, opacity;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Saki 图片 -->
+  <img id="saki" src="195px-Saki_1021_00.png" class="flip-img" width="200" />
+
+  <!-- 太阳光晕 / 月亮 -->
+  <div class="sun"></div>
+  <div class="moon"></div>
+
+  <!-- 切换按钮 -->
+  <button class="toggle-night-btn" onclick="toggleNightMode()">🌙 切换夜间模式</button>
+
+  <!-- 银河 Canvas -->
+  <canvas id="galaxyCanvas"></canvas>
+
+  <script>
+    const img = document.getElementById('saki');
+    const sun = document.querySelector('.sun');
+    const moon = document.querySelector('.moon');
+
+    let mouseX = window.innerWidth / 2;
+    let mouseY = window.innerHeight / 2;
+
+    let posX = window.innerWidth / 2 - 100;
+    let posY = window.innerHeight / 2 - 100;
+
+    const speedFactor = 0.05;
+
+    // 监听鼠标位置
+    window.addEventListener('mousemove', (e) => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+    });
+
+    // 缓动动画更新位置
+    function updatePosition() {
+      posX += (mouseX - posX) * speedFactor;
+      posY += (mouseY - posY) * speedFactor;
+
+      img.style.left = `${posX}px`;
+      img.style.top = `${posY}px`;
+
+      createRainbowTrail(posX + 100, posY + 100);
+      createGlowEffect(posX + 100, posY + 100);
+
+      requestAnimationFrame(updatePosition);
+    }
+
+    // 自动翻转
+    setInterval(() => {
+      img.classList.toggle('flipped');
+    }, 300);
+
+    // 启动动画
+    updatePosition();
+
+    // 🌈 创建彩虹拖尾粒子
+    function createRainbowTrail(x, y) {
+      const hue = (Date.now() / 10) % 360;
+      const particle = document.createElement('div');
+      particle.className = 'rainbow-particle';
+      particle.style.left = `${x}px`;
+      particle.style.top = `${y}px`;
+      particle.style.background = `hsl(${hue}, 100%, 70%)`;
+      document.body.appendChild(particle);
+
+      setTimeout(() => {
+        particle.remove();
+      }, 1000);
+    }
+
+    // 💫 创建光晕扩散特效
+    function createGlowEffect(x, y) {
+      const glow = document.createElement('div');
+      glow.className = 'glow-ring';
+      glow.style.left = `${x - 10}px`;
+      glow.style.top = `${y - 10}px`;
+      document.body.appendChild(glow);
+
+      setTimeout(() => {
+        glow.remove();
+      }, 1000);
+    }
+
+    // 🗣️ 点击 Saki 显示气泡
+    img.addEventListener('click', () => {
+      showSpeechBubble(img.offsetLeft + 100, img.offsetTop - 40, "Hello~");
+    });
+
+    function showSpeechBubble(x, y, text) {
+      const bubble = document.createElement('div');
+      bubble.className = 'speech-bubble';
+      bubble.textContent = text;
+      bubble.style.left = `${x}px`;
+      bubble.style.top = `${y}px`;
+      document.body.appendChild(bubble);
+
+      setTimeout(() => {
+        bubble.remove();
+      }, 3000);
+    }
+
+    // 🌙 切换夜间模式
+    function toggleNightMode() {
+      const isNight = document.body.classList.contains('night-mode');
+      document.body.classList.toggle('night-mode');
+      sun.style.display = isNight ? 'block' : 'none';
+      moon.style.display = isNight ? 'none' : 'block';
+
+      const btn = document.querySelector('.toggle-night-btn');
+      btn.classList.toggle('night');
+
+      if (!isNight) {
+        btn.textContent = '☀️ 切换日间模式';
+        createStars(); // 添加星星
+        startGalaxy(); // 开始绘制银河
+        startShootingStars(); // 开启流星雨
+      } else {
+        btn.textContent = '🌙 切换夜间模式';
+        removeStars(); // 移除星星
+        stopGalaxy(); // 停止银河
+        stopShootingStars(); // 停止流星
+      }
+    }
+
+    // 🌟 创建星星粒子
+    function createStars(count = 200) {
+      for (let i = 0; i < count; i++) {
+        const star = document.createElement('div');
+        star.className = 'star';
+        star.style.left = `${Math.random() * window.innerWidth}px`;
+        star.style.top = `${Math.random() * window.innerHeight}px`;
+        document.body.appendChild(star);
+      }
+    }
+
+    function removeStars() {
+      const stars = document.querySelectorAll('.star');
+      stars.forEach(star => star.remove());
+    }
+
+    // 🌌 银河 Canvas
+    const galaxyCanvas = document.getElementById('galaxyCanvas');
+    let galaxyCtx;
+    let galaxyAnimating = false;
+
+    function startGalaxy() {
+      galaxyCtx = galaxyCanvas.getContext('2d');
+      galaxyCanvas.width = window.innerWidth;
+      galaxyCanvas.height = window.innerHeight;
+      galaxyAnimating = true;
+      drawGalaxy();
+    }
+
+    function stopGalaxy() {
+      galaxyAnimating = false;
+      galaxyCtx.clearRect(0, 0, galaxyCanvas.width, galaxyCanvas.height);
+    }
+
+    function drawGalaxy() {
+      if (!galaxyAnimating) return;
+
+      const w = galaxyCanvas.width;
+      const h = galaxyCanvas.height;
+
+      galaxyCtx.clearRect(0, 0, w, h);
+
+      // 银河漩涡
+      const gradient = galaxyCtx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h));
+      gradient.addColorStop(0, 'rgba(255, 255, 255, 0.2)');
+      gradient.addColorStop(0.3, 'rgba(100, 100, 255, 0.1)');
+      gradient.addColorStop(0.6, 'rgba(50, 50, 200, 0.05)');
+      gradient.addColorStop(1, 'transparent');
+
+      galaxyCtx.fillStyle = gradient;
+      galaxyCtx.fillRect(0, 0, w, h);
+
+      requestAnimationFrame(drawGalaxy);
+    }
+
+    // 🌠 流星特效
+    let shootingInterval = null;
+
+    function startShootingStars() {
+      shootingInterval = setInterval(createShootingStar, 2000);
+    }
+
+    function stopShootingStars() {
+      clearInterval(shootingInterval);
+      const stars = document.querySelectorAll('.shooting-star');
+      stars.forEach(s => s.remove());
+    }
+
+    function createShootingStar() {
+      const x = Math.random() * window.innerWidth;
+      const y = -50;
+      const length = 40 + Math.random() * 20;
+      const angle = -45 + Math.random() * 20 - 10; // 随机角度
+      const duration = 2 + Math.random(); // 随机持续时间
+
+      const star = document.createElement('div');
+      star.className = 'shooting-star';
+      star.style.left = `${x}px`;
+      star.style.top = `${y}px`;
+      star.style.height = `${length}px`;
+      star.style.transform = `rotate(${angle}deg) translateY(0)`;
+      star.style.opacity = 0;
+
+      document.body.appendChild(star);
+
+      // 使用 CSS 动画模拟流星轨迹
+      const keyframes = new KeyframeEffect(
+        star,
+        [
+          { transform: `rotate(${angle}deg) translateY(0)`, opacity: 0 },
+          { transform: `rotate(${angle}deg) translateY(400px)`, opacity: 1 },
+          { transform: `rotate(${angle}deg) translateY(400px)`, opacity: 0 }
+        ],
+        { duration: duration * 1000, easing: 'linear' }
+      );
+
+      const animation = new Animation(keyframes, document.timeline);
+      animation.play();
+
+      setTimeout(() => {
+        star.remove();
+        animation.cancel();
+      }, duration * 1000);
+    }
+
+    // 🧡 新增：全局点击问候逻辑
+document.body.addEventListener('click', (e) => {
+  // 排除点击的是功能按钮或图片的情况
+  if (
+    e.target.matches('.toggle-night-btn') ||   // 夜间模式按钮
+    e.target.id === 'saki'                     // Saki 图片
+  ) return;
+
+  // 在 Saki 图片附近显示问候语
+  showSpeechBubble(posX + 100, posY - 40, "Hello~");
+});
+  </script>
+</body>
+</html>
